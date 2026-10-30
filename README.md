@@ -25,7 +25,7 @@ Simulador 3D interactivo de electrostática desarrollado con **Three.js**, **KaT
 
 ## 📖 Instrucciones de Uso
 
-1. **Clonar o descargar** el repositorio en tu computadora, asegurándote de que el archivo principal.
+1. **Clonar o descargar** el repositorio en tu computadora.
 2. **Abrir el archivo** en cualquier navegador web moderno (se recomienda Google Chrome, Brave o Firefox). *(Nota: No requiere instalación de servidores locales ni dependencias complejas de Node.js).*
 3. **Interactuar con los controles:**
    * **Controles 3D:** Clic izquierdo y arrastrar para orbitar alrededor del sistema; rueda del ratón para hacer zoom.
