@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador 3D - Potencial y Campo Eléctrico de un Disco (v2.2)</title>
+    
+    <!-- KaTeX para fórmulas matemáticas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+    <!-- Chart.js para la gráfica de V(x) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: #ffffff;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Paneles Flotantes Arrastrables Comunes */
+        .floating-panel {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.92);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #555;
+            z-index: 10;
+            max-height: 88vh;
+            overflow-y: auto;
+            cursor: default;
+        }
+
+        #ui-panel-left {
+            bottom: 20px;
+            left: 20px;
+            width: 420px;
+        }
+
+        #ui-panel-right {
+            bottom: 20px;
+            right: 20px;
+            width: 280px;
+        }
+
+        /* Panel Flotante Independiente para la Gráfica (Esquina Superior Derecha) */
+        #ui-panel-chart {
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            border-color: #9C27B0;
+        }
+
+        /* Cabecera para arrastrar */
+        .panel-header {
+            font-size: 13px;
+            font-weight: bold;
+            color: #88c0d0;
+            cursor: grab;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-header:active {
+            cursor: grabbing;
+        }
+        .control-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        label {
+            font-size: 12px;
+            color: #ccc;
+        }
+        input[type="range"] {
+            cursor: pointer;
+            width: 100%;
+        }
+        .toggles-group {
+            display: flex;
+            justify-content: space-between;
+            background: #252525;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        .toggles-group label {
+            cursor: pointer;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .formula-box {
+            background: #222;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border-left: 5px solid #4CAF50;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .formula-box.sigma-box {
+            border-left-color: #2196F3;
+        }
+        .formula-box.field-box {
+            border-left-color: #FF9800;
+        }
+        .formula-title {
+            font-size: 11px;
+            color: #4CAF50;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        .sigma-box .formula-title {
+            color: #2196F3;
+        }
+        .field-box .formula-title {
+            color: #FF9800;
+        }
+        .math-render {
+            font-size: 13px;
+            color: #fff;
+            overflow-x: auto;
+            padding: 2px 0;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #aaa;
+            border: 1px solid #333;
+            z-index: 5;
+        }
+        .btn-export {
+            background: #9C27B0;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 6px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn-export:hover {
+            background: #7B1FA2;
+        }
+        .btn-export:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="instructions">
+        <b>Controles 3D:</b> Clic izq + arrastrar para orbitar | Rueda para zoom
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Panel Izquierdo: Parámetros, Toggles y Fórmulas -->
+    <div id="ui-panel-left" class="floating-panel">
+        <div class="panel-header" id="header-left">
+            <span>⚙️ Panel Principal (v2.2)</span>
+            <span style="font-size: 10px; color: #777;">(Arrastrar)</span>
+        </div>
+
+        <!-- Toggles de visibilidad -->
+        <div class="toggles-group" style="flex-wrap: wrap; gap: 6px;">
+            <label><input type="checkbox" id="chkDisk" checked> Disco</label>
+            <label><input type="checkbox" id="chkField" checked> Campo</label>
+            <label><input type="checkbox" id="chkSensor" checked> Sensor</label>
+            <label><input type="checkbox" id="chkRings" checked> Anillos (dr, dq)</label>
+        </div>
+
+        <!-- Parámetros de Entrada (R, Q, x) -->
+        <div class="control-section">
+            <label for="radiusRange">Radio del Disco (R): <span id="valR">2.0</span> m</label>
+            <input type="range" id="radiusRange" min="0.5" max="5" step="0.1" value="2.0">
+        </div>
+        
+        <div class="control-section">
+            <label for="chargeRange">Carga Total (Q): <span id="valQ">1.0</span> µC</label>
+            <input type="range" id="chargeRange" min="0.1" max="5" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-section">
+            <label for="distRange">Distancia Sensor (x): <span id="valX">3.0</span> m</label>
+            <input type="range" id="distRange" min="0.1" max="10" step="0.1" value="3.0">
+        </div>
+
+        <!-- Desglose Diferencial en Tiempo Real (r, dr, dq) -->
+        <div class="formula-box" style="border-left-color: #E91E63;">
+            <div class="formula-title" style="color: #E91E63;">Partes Diferenciales (Ejemplo de Anillo)</div>
+            <div id="mathDifferential" class="math-render">Cargando...</div>
+        </div>
+
+        <!-- Fórmulas Calculadas -->
+        <div class="formula-box sigma-box">
+            <div class="formula-title">1. Densidad Superficial (σ)</div>
+            <div id="mathSigma" class="math-render">Cargando...</div>
+        </div>
+
+        <div class="formula-box">
+            <div class="formula-title">2. Potencial Eléctrico (V)</div>
+            <div id="mathV" class="math-render">Cargando...</div>
+        </div>
+
+        <div class="formula-box field-box">
+            <div class="formula-title">3. Campo Eléctrico (E)</div>
+            <div id="mathEDiv" class="math-render">Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Panel Independiente: Gráfica V(x) y Exportación CSV (Esquina Superior Derecha) -->
+    <div id="ui-panel-chart" class="floating-panel">
+        <div class="panel-header" id="header-chart">
+            <span style="color: #BA68C8;">📊 Gráfica: V(x) vs x (0 ≤ x ≤ 2R)</span>
+            <span style="font-size: 10px; color: #777;">(Arrastrar)</span>
+        </div>
+        <div style="position: relative; width: 100%; height: 210px; margin-top: 5px;">
+            <canvas id="chartVx"></canvas>
+        </div>
+        <button id="btnExportCSV" class="btn-export">📥 Exportar Datos (CSV)</button>
+    </div>
+
+    <!-- Panel Derecho: Orientación y Rotación 3D del Disco -->
+    <div id="ui-panel-right" class="floating-panel">
+        <div class="panel-header" id="header-right">
+            <span>🔄 Orientación 3D</span>
+            <span style="font-size: 10px; color: #777;">(Arrastrar)</span>
+        </div>
+
+        <div class="control-section">
+            <label>Rotación Eje X: <span id="valRotX">0</span>°</label>
+            <input type="range" id="rotX" min="0" max="360" step="5" value="0">
+        </div>
+        <div class="control-section">
+            <label>Rotación Eje Y: <span id="valRotY">0</span>°</label>
+            <input type="range" id="rotY" min="0" max="360" step="5" value="0">
+        </div>
+        <div class="control-section">
+            <label>Rotación Eje Z: <span id="valRotZ">0</span>°</label>
+            <input type="range" id="rotZ" min="0" max="360" step="5" value="0">
+        </div>
+    </div>
+
+    <!-- Three.js y OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // --- 1. CONFIGURACIÓN 3D ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(6, 6, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 2, 0);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+        gridHelper.position.y = -0.05;
+        scene.add(gridHelper);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // --- 2. GRUPO PRINCIPAL ---
+        const systemGroup = new THREE.Group();
+        scene.add(systemGroup);
+
+        let radiusR = 2.0;
+        
+        const diskGeometry = new THREE.CylinderGeometry(radiusR, radiusR, 0.05, 32);
+        const diskMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x442222, 
+            emissive: 0xFF0000,
+            emissiveIntensity: 0.2,
+            roughness: 0.3, 
+            side: THREE.DoubleSide 
+        });
+        const disk = new THREE.Mesh(diskGeometry, diskMaterial);
+        systemGroup.add(disk);
+
+        // Marcador Central del Disco (Origen x = 0)
+        const centerMarkerGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const centerMarkerMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xffffff,
+            emissiveIntensity: 0.8,
+            roughness: 0.1
+        });
+        const centerMarker = new THREE.Mesh(centerMarkerGeo, centerMarkerMat);
+        centerMarker.position.set(0, 0.035, 0);
+        systemGroup.add(centerMarker);
+
+        const axisMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
+        const pointsAxis = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 10, 0)];
+        const axisGeo = new THREE.BufferGeometry().setFromPoints(pointsAxis);
+        const axisLine = new THREE.Line(axisGeo, axisMaterial);
+        systemGroup.add(axisLine);
+
+        // Sensor Naranja Fijo y Sólido
+        const sensorGeo = new THREE.SphereGeometry(0.25, 32, 32);
+        const sensorMat = new THREE.MeshStandardMaterial({ 
+            color: 0xFF5500,           
+            emissive: 0xFF5500,        
+            emissiveIntensity: 1.5,    
+            roughness: 0.1
+        });
+        const sensorP = new THREE.Mesh(sensorGeo, sensorMat);
+        systemGroup.add(sensorP);
+
+        // Líneas de Campo
+        const fieldLinesGroup = new THREE.Group();
+        systemGroup.add(fieldLinesGroup);
+
+        // Grupo para Anillos Diferenciales (dr, dq)
+        const ringsGroup = new THREE.Group();
+        systemGroup.add(ringsGroup);
+
+        function crearLineasCampo(R, Q_micro) {
+            while(fieldLinesGroup.children.length > 0){ 
+                fieldLinesGroup.remove(fieldLinesGroup.children[0]); 
+            }
+
+            const numLines = 16;
+            const alturaCarga = 1.0 + (Q_micro * 1.5); 
+            const maxHeight = R * 1.5 + alturaCarga;
+
+            for (let i = 0; i < numLines; i++) {
+                let angle = (i / numLines) * Math.PI * 2;
+                let startRadiusFraction = 0.3 + Math.random() * 0.6;
+                let rStart = R * startRadiusFraction;
+
+                let p0Up = new THREE.Vector3(Math.cos(angle) * rStart, 0, Math.sin(angle) * rStart);
+                let p1Up = new THREE.Vector3(Math.cos(angle) * (rStart * 1.2), maxHeight * 0.4, Math.sin(angle) * (rStart * 1.2));
+                let p2Up = new THREE.Vector3(Math.cos(angle) * (R * 0.1), maxHeight, Math.sin(angle) * (R * 0.1));
+
+                let curveUp = new THREE.QuadraticBezierCurve3(p0Up, p1Up, p2Up);
+                let tubeGeoUp = new THREE.TubeGeometry(curveUp, 20, Math.max(0.015, R * 0.02), 6, false);
+                let lineMatUp = new THREE.MeshStandardMaterial({
+                    color: 0x64B5F6,
+                    transparent: true,
+                    opacity: 0.45,
+                    roughness: 0.2,
+                    side: THREE.DoubleSide
+                });
+                let tubeUp = new THREE.Mesh(tubeGeoUp, lineMatUp);
+                fieldLinesGroup.add(tubeUp);
+
+                let p0Down = new THREE.Vector3(Math.cos(angle) * rStart, 0, Math.sin(angle) * rStart);
+                let p1Down = new THREE.Vector3(Math.cos(angle) * (rStart * 1.2), -maxHeight * 0.4, Math.sin(angle) * (rStart * 1.2));
+                let p2Down = new THREE.Vector3(Math.cos(angle) * (R * 0.1), -maxHeight, Math.sin(angle) * (R * 0.1));
+
+                let curveDown = new THREE.QuadraticBezierCurve3(p0Down, p1Down, p2Down);
+                let tubeGeoDown = new THREE.TubeGeometry(curveDown, 20, Math.max(0.015, R * 0.02), 6, false);
+                let lineMatDown = new THREE.MeshStandardMaterial({
+                    color: 0x64B5F6,
+                    transparent: true,
+                    opacity: 0.45,
+                    roughness: 0.2,
+                    side: THREE.DoubleSide
+                });
+                let tubeDown = new THREE.Mesh(tubeGeoDown, lineMatDown);
+                fieldLinesGroup.add(tubeDown);
+            }
+        }
+
+        // --- 3. FÍSICA Y ENTRADAS ---
+        const k = 8.99e9; 
+
+        const inputR = document.getElementById('radiusRange');
+        const inputQ = document.getElementById('chargeRange');
+        const inputX = document.getElementById('distRange');
+        
+        const rotXInput = document.getElementById('rotX');
+        const rotYInput = document.getElementById('rotY');
+        const rotZInput = document.getElementById('rotZ');
+
+        const spanR = document.getElementById('valR');
+        const spanQ = document.getElementById('valQ');
+        const spanX = document.getElementById('valX');
+        const spanRotX = document.getElementById('valRotX');
+        const spanRotY = document.getElementById('valRotY');
+        const spanRotZ = document.getElementById('valRotZ');
+
+        const mathSigmaDiv = document.getElementById('mathSigma');
+        const mathVDiv = document.getElementById('mathV');
+        const mathEDiv = document.getElementById('mathEDiv');
+
+        const chkDisk = document.getElementById('chkDisk');
+        const chkField = document.getElementById('chkField');
+        const chkSensor = document.getElementById('chkSensor');
+        const chkRings = document.getElementById('chkRings');
+        
+        const mathDiffDiv = document.getElementById('mathDifferential');
+
+        function crearAnillosDiferenciales(R, Q_total) {
+            while(ringsGroup.children.length > 0){ 
+                ringsGroup.remove(ringsGroup.children[0]); 
+            }
+
+            const numAnillos = 15;
+            const dr = R / numAnillos;
+            const areaTotal = Math.PI * R * R;
+            const sigma = Q_total / areaTotal;
+
+            for (let i = 0; i < numAnillos; i++) {
+                let r_inner = i * dr;
+                let r_outer = (i + 1) * dr;
+                let r_mid = (r_inner + r_outer) / 2;
+                
+                let areaAnillo = 2 * Math.PI * r_mid * dr;
+                let dq = sigma * areaAnillo; 
+
+                const ringGeo = new THREE.RingGeometry(r_inner, r_outer, 32);
+                let intensidad = 0.2 + (dq / (sigma * areaTotal * 1.5 / numAnillos)) * 0.8;
+                
+                const ringMat = new THREE.MeshStandardMaterial({
+                    color: i % 2 === 0 ? 0xFF5722 : 0xFF9800,
+                    emissive: 0xFF5722,
+                    emissiveIntensity: intensidad * 0.6,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.85,
+                    roughness: 0.4
+                });
+
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2;
+                ringMesh.position.y = 0.03;
+                ringMesh.userData = { r: r_mid, dr: dr, dq: dq, index: i };
+                
+                ringsGroup.add(ringMesh);
+            }
+
+            let ejemploIdx = Math.floor(numAnillos / 2);
+
+            if (typeof katex !== 'undefined' && mathDiffDiv) {
+                try {
+                    katex.render(`dr = ${dr.toFixed(2)}\\text{ m}, \\quad r \\in [${(ejemploIdx*dr).toFixed(2)}, ${((ejemploIdx+1)*dr).toFixed(2)}]`, mathDiffDiv, { throwOnError: false });
+                } catch(e) {
+                    mathDiffDiv.innerText = `dr = ${dr.toFixed(2)} m`;
+                }
+            }
+        }
+
+        // --- CONFIGURACIÓN DE CHART.JS PARA V(x) ---
+        const ctxChart = document.getElementById('chartVx').getContext('2d');
+        const chartVx = new Chart(ctxChart, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'V(x) [Volts]',
+                        data: [],
+                        borderColor: '#BA68C8',
+                        backgroundColor: 'rgba(186, 104, 200, 0.15)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Punto evaluado P(x)',
+                        data: [],
+                        borderColor: '#FF5722',
+                        backgroundColor: '#FF5722',
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        showLine: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Potencial Eléctrico V(x) en función de x (0 ≤ x ≤ 2R)',
+                        color: '#E0E0E0',
+                        font: { size: 11, weight: 'bold' }
+                    },
+                    legend: {
+                        labels: { color: '#CCC', font: { size: 9 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toExponential(2) + ' V';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Distancia x (m)', color: '#AAA', font: { size: 10 } },
+                        ticks: { color: '#AAA', font: { size: 9 } },
+                        grid: { color: '#333' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Potencial V (Volts)', color: '#AAA', font: { size: 10 } },
+                        ticks: { 
+                            color: '#AAA', 
+                            font: { size: 9 },
+                            callback: function(value) { return value.toExponential(1); }
+                        },
+                        grid: { color: '#333' }
+                    }
+                }
+            }
+        });
+
+        function actualizarGrafica(R, Q, x_eval) {
+            const numPuntos = 50;
+            const x_max = 2 * R;
+            const dataCurva = [];
+
+            for (let i = 0; i <= numPuntos; i++) {
+                let x_i = (i / numPuntos) * x_max;
+                let V_i = ( (2 * k * Q) / (R * R) ) * ( Math.sqrt((x_i * x_i) + (R * R)) - Math.abs(x_i) );
+                dataCurva.push({ x: x_i, y: V_i });
+            }
+
+            let V_eval = ( (2 * k * Q) / (R * R) ) * ( Math.sqrt((x_eval * x_eval) + (R * R)) - Math.abs(x_eval) );
+            let dataPunto = (x_eval <= x_max) ? [{ x: x_eval, y: V_eval }] : [];
+
+            chartVx.data.datasets[0].data = dataCurva;
+            chartVx.data.datasets[1].data = dataPunto;
+            chartVx.options.scales.x.max = x_max;
+            chartVx.update();
+        }
+
+        // --- FUNCIÓN DE EXPORTACIÓN A CSV (5.6 RÚBRICA) ---
+        function exportarDatosCSV() {
+            let R = parseFloat(inputR.value);
+            let Q_micro = parseFloat(inputQ.value);
+            let Q = Q_micro * 1e-6;
+            const numPuntos = 100;
+            const x_max = 2 * R;
+
+            let csvLines = ["x (m),V(x) (V)"];
+
+            for (let i = 0; i <= numPuntos; i++) {
+                let x_i = (i / numPuntos) * x_max;
+                let V_i = ((2 * k * Q) / (R * R)) * (Math.sqrt((x_i * x_i) + (R * R)) - Math.abs(x_i));
+                csvLines.push(`${x_i.toFixed(4)},${V_i.toExponential(6)}`);
+            }
+
+            let csvString = csvLines.join("\n");
+            let blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+            let url = URL.createObjectURL(blob);
+
+            let link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "potencial_electrico_Vx.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        document.getElementById('btnExportCSV').addEventListener('click', exportarDatosCSV);
+
+        function actualizarSimulacion() {
+            let R = parseFloat(inputR.value);
+            let Q_micro = parseFloat(inputQ.value);
+            let Q = Q_micro * 1e-6; 
+            let x = parseFloat(inputX.value);
+
+            spanR.innerText = R.toFixed(1);
+            spanQ.innerText = Q_micro.toFixed(1);
+            spanX.innerText = x.toFixed(1);
+
+            disk.visible = chkDisk.checked;
+            centerMarker.visible = chkDisk.checked;
+            fieldLinesGroup.visible = chkField.checked;
+            axisLine.visible = chkSensor.checked;
+            sensorP.visible = chkSensor.checked;
+
+            disk.geometry.dispose();
+            disk.geometry = new THREE.CylinderGeometry(R, R, 0.05, 32);
+            centerMarker.position.set(0, 0.035, 0);
+            sensorP.position.set(0, x, 0);
+
+            crearLineasCampo(R, Q_micro);
+
+            let opacidadCampo = Math.max(0.15, 0.7 - (x / 15.0));
+            fieldLinesGroup.children.forEach(mesh => {
+                if(mesh.material) mesh.material.opacity = opacidadCampo;
+            });
+
+            crearAnillosDiferenciales(R, Q);
+            ringsGroup.visible = chkRings.checked;
+
+            let rx = THREE.MathUtils.degToRad(parseFloat(rotXInput.value));
+            let ry = THREE.MathUtils.degToRad(parseFloat(rotYInput.value));
+            let rz = THREE.MathUtils.degToRad(parseFloat(rotZInput.value));
+
+            spanRotX.innerText = rotXInput.value;
+            spanRotY.innerText = rotYInput.value;
+            spanRotZ.innerText = rotZInput.value;
+
+            systemGroup.rotation.set(rx, ry, rz);
+
+            let area = Math.PI * (R * R);
+            let sigma = Q / area;
+            let V = ( (2 * k * Q) / (R * R) ) * ( Math.sqrt((x * x) + (R * R)) - Math.abs(x) );
+            let termSQRT = Math.sqrt((x * x) + (R * R));
+            let E = ( (2 * k * Q) / (R * R) ) * ( 1 - (x / termSQRT) );
+
+            let sigmaNormalized = Math.min(Math.abs(sigma) / 4e-7, 1.0);
+            disk.material.emissiveIntensity = 0.15 + (sigmaNormalized * 0.85);
+
+            if (typeof katex !== 'undefined') {
+                try {
+                    katex.render(`\\sigma = \\frac{Q}{\\pi R^2} = ${sigma.toExponential(2)}\\text{ C/m}^2`, mathSigmaDiv, { throwOnError: false });
+                } catch (e) { mathSigmaDiv.innerText = `σ = ${sigma.toExponential(2)} C/m²`; }
+
+                try {
+                    katex.render(`V = \\frac{2kQ}{R^2} \\left( \\sqrt{x^2 + R^2} - x \\right) = ${V.toExponential(2)}\\text{ V}`, mathVDiv, { throwOnError: false });
+                } catch (e) { mathVDiv.innerText = `V = ${V.toExponential(2)} V`; }
+
+                try {
+                    katex.render(`E = \\frac{2kQ}{R^2} \\left( 1 - \\frac{x}{\\sqrt{x^2 + R^2}} \\right) = ${E.toExponential(2)}\\text{ N/C}`, mathEDiv, { throwOnError: false });
+                } catch (e) { mathEDiv.innerText = `E = ${E.toExponential(2)} N/C`; }
+            } else {
+                mathSigmaDiv.innerText = `σ = ${sigma.toExponential(2)} C/m²`;
+                mathVDiv.innerText = `V = ${V.toExponential(2)} V`;
+                mathEDiv.innerText = `E = ${E.toExponential(2)} N/C`;
+            }
+
+            actualizarGrafica(R, Q, x);
+        }
+
+        [inputR, inputQ, inputX, rotXInput, rotYInput, rotZInput, chkDisk, chkField, chkSensor, chkRings].forEach(element => {
+            element.addEventListener('input', actualizarSimulacion);
+            element.addEventListener('change', actualizarSimulacion);
+        });
+        
+        window.addEventListener('load', () => {
+            setTimeout(actualizarSimulacion, 100);
+        });
+        actualizarSimulacion();
+
+        function hacerDragueable(panelId, headerId) {
+            const panel = document.getElementById(panelId);
+            const header = document.getElementById(headerId);
+            let isDragging = false;
+            let startX, startY;
+
+            header.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX - panel.offsetLeft;
+                startY = e.clientY - panel.offsetTop;
+                panel.style.bottom = 'auto'; 
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                let newX = e.clientX - startX;
+                let newY = e.clientY - startY;
+                newX = Math.max(10, Math.min(window.innerWidth - panel.offsetWidth - 10, newX));
+                newY = Math.max(10, Math.min(window.innerHeight - panel.offsetHeight - 10, newY));
+                panel.style.left = newX + 'px';
+                panel.style.top = newY + 'px';
+            });
+
+            document.addEventListener('mouseup', () => { isDragging = false; });
+        }
+
+        hacerDragueable('ui-panel-left', 'header-left');
+        hacerDragueable('ui-panel-right', 'header-right');
+        hacerDragueable('ui-panel-chart', 'header-chart');
+
+        let clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            let elapsedTime = clock.getElapsedTime();
+            let pulseScale = 1 + 0.15 * Math.sin(elapsedTime * 6);
+            sensorP.scale.set(pulseScale, pulseScale, pulseScale);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+```
+
+### Resumen de cambios en la Versión 2.2:
+* **Eliminado:** El botón de "Centrar Vista" (`#btn-center`) fue removido por completo de la pantalla.
+* **Agregado:** Botón `📥 Exportar Datos (CSV)` ubicado directamente dentro del panel flotante de la gráfica (esquina superior derecha).
+* **Funcionalidad CSV:** Genera automáticamente la descarga de `potencial_electrico_Vx.csv` conteniendo 101 puntos de evaluación ($x, V(x)$) calculados uniformemente en el intervalo $0 \le x \le 2R$.
